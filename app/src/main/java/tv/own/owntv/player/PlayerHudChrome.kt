@@ -54,8 +54,8 @@ import tv.own.owntv.ui.theme.OwnTVTheme
 import tv.own.owntv.ui.theme.animationsOn
 
 /**
- * The HUD's chrome: the top strip, the channel/direct-tune OSD cards, the centre transport and the
- * bottom bar. Split out of [PlayerHud] — behaviour unchanged; these are `internal` rather than
+ * The HUD's chrome: the top strip, the channel/direct-tune OSD cards and the bottom dock. Split out of
+ * [PlayerHud] — behaviour unchanged; these are `internal` rather than
  * file-private only because [PlayerHud] now lives in a sibling file.
  */
 
@@ -314,7 +314,9 @@ internal fun CenterControls(
 
 @Composable
 internal fun BottomBar(
-    player: PlaybackEngine, isLive: Boolean, position: () -> Long, duration: Long,
+    player: PlaybackEngine, nav: NavState, isPlaying: Boolean, isLive: Boolean,
+    onRewindLive: (() -> Unit)?, onForwardLive: (() -> Unit)?, playFocus: FocusRequester,
+    position: () -> Long, duration: Long,
     volume: Int, audioCount: Int, subCount: Int, zoomMode: ZoomMode, speedLabel: String,
     onScrubLive: ((Int) -> Unit)?, timeshiftOffset: () -> Int?, onGoToLive: (() -> Unit)?, onOpenJumpBack: (() -> Unit)?,
     liveProgrammes: List<LiveProgramme> = emptyList(),
@@ -370,6 +372,20 @@ internal fun BottomBar(
                 Spacer(Modifier.height(10.dp))
             }
         }
+        // Transport belongs to the bottom player dock, beside the timeline it controls. Keeping it
+        // here avoids placing Play/Rewind/Forward over the centre of a fullscreen channel.
+        CenterControls(
+            player = player,
+            nav = nav,
+            isPlaying = isPlaying,
+            isLive = isLive,
+            onRewindLive = onRewindLive,
+            onForwardLive = onForwardLive,
+            timeshiftOffset = timeshiftOffset,
+            playFocus = playFocus,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(10.dp))
         // Band B — the tools. Each cluster hugs its own screen edge and the gap between them is the
         // slack a focused button expands into, so growth is always toward the centre: the left cluster
         // pushes only the buttons to its right, the right cluster only those to its left. Walk either
