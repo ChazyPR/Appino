@@ -810,8 +810,12 @@ class LiveViewModel(
         _search.value = query
     }
 
-    fun onChannelFocused(channel: ChannelEntity) {
-        _previewArmed.value = true // a real user focus — the in-pane preview may now play
+    /**
+     * Deliberately select a channel for the in-pane preview. Focus navigation must not call this:
+     * moving up/down should only move the cursor, while the first OK commits the preview.
+     */
+    fun selectPreview(channel: ChannelEntity) {
+        _previewArmed.value = true
         _previewChannel.value = channel
     }
 

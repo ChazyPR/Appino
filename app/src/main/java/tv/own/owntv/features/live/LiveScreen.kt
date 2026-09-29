@@ -586,10 +586,11 @@ fun LiveScreen(
                             runCatching { effectiveListState.scrollToItem(idx) }
                             withFrameNanos { }
                             if (target != null) {
-                                // Set the previewed channel so selFocus binds to the new row, then focus.
+                                // A paging jump deliberately selects its destination before focusing it,
+                                // so the focus-restoration target and preview pane stay aligned.
                                 val item = channels.itemSnapshotList.items.firstOrNull { it.id == target }
                                 if (item != null) {
-                                    vm.onChannelFocused(item)
+                                    vm.selectPreview(item)
                                     runCatching { selFocus.requestFocus() }
                                 }
                             } else {
@@ -727,16 +728,21 @@ fun LiveScreen(
                                     firstItemFocus = firstItemFocus,
                                 ),
                                 onFocus = {
-                                    vm.onChannelFocused(channel)
                                     if (rememberLive) {
                                         perCategoryChannelIds[selectedKey] = channel.id
                                     }
                                 },
                                 onClick = {
-                                    vm.watchFullscreen(channel, channels.itemSnapshotList.items.filterNotNull())
-                                    // External player on for Live TV: the channel went to another app, so
-                                    // don't mount the fullscreen player (it would spin up an idle engine).
-                                    if (!externalPlayerOn) onFullscreen()
+                                    if (previewChannel?.id != channel.id) {
+                                        // First OK commits the channel under the cursor to the preview.
+                                        // The next OK, while that same channel remains selected, opens it.
+                                        vm.selectPreview(channel)
+                                    } else {
+                                        vm.watchFullscreen(channel, channels.itemSnapshotList.items.filterNotNull())
+                                        // External player on for Live TV: the channel went to another app, so
+                                        // don't mount the fullscreen player (it would spin up an idle engine).
+                                        if (!externalPlayerOn) onFullscreen()
+                                    }
                                 },
                                 onLongClick = { contextChannel = channel; contextChannelId = channel.id },
                             )
