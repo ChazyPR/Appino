@@ -490,10 +490,6 @@ fun LiveScreen(
                     }
                 }
             },
-            // Focusing a folder stops the in-pane preview — but only when a preview is actually running.
-            // When the player is docked (live PiP) or fullscreen, previewEnabled is false and stopPreview
-            // would kill that stream (e.g. while navigating left to leave Live), so we skip it.
-            onFocused = { if (previewEnabled) vm.stopPreview() },
             listState = catListState,
             focusRequester = railFocus,
             onNavigateRight = {
