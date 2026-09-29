@@ -116,18 +116,18 @@ internal fun CircleButton(icon: OwnTVIcon, size: Int, primary: Boolean = false, 
     }
 }
 
-/** The transport buttons live in one frosted capsule instead of floating loose over the video. */
+/** Compact transport capsule: its 44 dp buttons match the rest of the bottom player dock. */
 @Composable
 internal fun TransportCapsule(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     Row(
         modifier
-            .clip(RoundedCornerShape(44.dp))
+            .clip(RoundedCornerShape(22.dp))
             .background(Color.Black.copy(alpha = 0.55f))
-            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(44.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(22.dp))
+            .padding(horizontal = 4.dp)
             .focusGroup(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         content = content,
     )
 }
