@@ -1061,6 +1061,19 @@ class LiveViewModel(
         return channelDao.recentlyWatched(pid, 1).first().firstOrNull()
     }
 
+    /**
+     * Restore the last channel the profile actually watched when the Live TV page opens. This is
+     * intentionally based on watch history (not the last row merely focused while browsing), and
+     * only arms the in-pane preview — it does not force the user into fullscreen playback.
+     */
+    suspend fun resumeLastWatchedPreview() {
+        val channel = lastWatchedLiveChannel() ?: return
+        if (!isVisibleToActiveProfile(channel)) return
+        _previewChannel.value = channel
+        _focusedChannel.value = channel
+        _previewArmed.value = true
+    }
+
     /** Final startup/deep-entry visibility check, including profile source and Customize policy. */
     suspend fun isVisibleToActiveProfile(channel: ChannelEntity): Boolean {
         val current = ctx.first { it.profileId >= 0L }
