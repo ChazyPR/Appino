@@ -188,21 +188,15 @@ fun LiveScreen(
     // Preview runs only when the player isn't busy (previewEnabled) AND the user hasn't turned it off.
     val effectivePreview = previewEnabled && livePreviewSetting
 
-    // Each time the Live TV page is entered, begin the in-pane playback from the last channel that
-    // was actually watched. The view model filters channels no longer visible to this profile.
-    LaunchedEffect(previewEnabled, effectivePreview) {
-        if (effectivePreview) vm.resumeLastWatchedPreview()
-    }
-
     // NOTE: do NOT stop the player when LiveScreen leaves composition — going fullscreen disposes
     // this screen, and stopping here would abort the stream that was just started. Playback is
     // stopped on fullscreen exit (shell BackHandler) instead.
 
-    // In-pane preview: play the selected channel after the focus settles (700ms). Disabled while the
+    // In-pane preview: play the focused channel after the focus settles (700ms). Disabled while the
     // fullscreen/mini player owns the surface (previewEnabled=false) to avoid two surfaces fighting.
     LaunchedEffect(previewChannel?.id, effectivePreview, previewArmed) {
-        // previewArmed keeps passive focus restoration from opening a stream; explicit selection and
-        // the deliberate last-watched restore above arm it for playback.
+        // previewArmed gates the case where the last channel was restored on startup — we don't auto-preview
+        // it until the user actually focuses a channel (then it plays normally).
         if (!effectivePreview || !previewArmed) return@LaunchedEffect
         val ch = previewChannel ?: return@LaunchedEffect
         delay(700)
