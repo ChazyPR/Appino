@@ -275,7 +275,7 @@ internal fun ChannelNumberCard(digits: String, error: String? = null, modifier: 
 internal fun CenterControls(
     player: PlaybackEngine, nav: NavState, isPlaying: Boolean, isLive: Boolean,
     onRewindLive: (() -> Unit)?, onForwardLive: (() -> Unit)?, timeshiftOffset: () -> Int?,
-    playFocus: FocusRequester, modifier: Modifier = Modifier,
+    playFocus: FocusRequester, showTimeshiftStatus: Boolean = true, modifier: Modifier = Modifier,
 ) {
     val seekStep by player.seekStepMs.collectAsStateWithLifecycle() // Settings -> Seek step
     val rewindMode = onRewindLive != null // this is a catch-up-capable Live channel
@@ -283,7 +283,7 @@ internal fun CenterControls(
     val timeshiftOffsetSec = timeshiftOffset()
     val timeshifting = timeshiftOffsetSec != null
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        if (timeshifting) {
+        if (timeshifting && showTimeshiftStatus) {
             // Counts down as the archive catches up to the live edge; grows if you pause.
             Text(
                 if (timeshiftOffsetSec <= 1) stringResource(R.string.player_at_live_edge) else stringResource(R.string.player_behind_live, mmss(timeshiftOffsetSec)),
@@ -372,26 +372,15 @@ internal fun BottomBar(
                 Spacer(Modifier.height(10.dp))
             }
         }
-        // Transport belongs to the bottom player dock, beside the timeline it controls. Keeping it
-        // here avoids placing Play/Rewind/Forward over the centre of a fullscreen channel.
-        CenterControls(
-            player = player,
-            nav = nav,
-            isPlaying = isPlaying,
-            isLive = isLive,
-            onRewindLive = onRewindLive,
-            onForwardLive = onForwardLive,
-            timeshiftOffset = timeshiftOffset,
-            playFocus = playFocus,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(10.dp))
-        // Band B — the tools. Each cluster hugs its own screen edge and the gap between them is the
-        // slack a focused button expands into, so growth is always toward the centre: the left cluster
-        // pushes only the buttons to its right, the right cluster only those to its left. Walk either
-        // cluster outward-in and nothing you have already passed ever moves.
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().focusGroup()) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Band B — media tools at the left, transport at the true centre, and the remaining tools at
+        // the right. A Box keeps all three clusters on one horizontal baseline while allowing Play to
+        // remain centred even when the two tool clusters have different widths.
+        Box(modifier = Modifier.fillMaxWidth().focusGroup()) {
+            Row(
+                modifier = Modifier.align(Alignment.CenterStart),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 // H2 — the ORDER comes from core's canonical list, not from the order these lines
                 // happen to be written in. Each control keeps its own composable and its own
                 // condition; only the sequence is shared, which is what makes this bar and the
@@ -440,8 +429,24 @@ internal fun BottomBar(
                     }
                 }
             }
-            Spacer(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CenterControls(
+                player = player,
+                nav = nav,
+                isPlaying = isPlaying,
+                isLive = isLive,
+                onRewindLive = onRewindLive,
+                onForwardLive = onForwardLive,
+                timeshiftOffset = timeshiftOffset,
+                playFocus = playFocus,
+                // Live state is already shown by the timeline badge in this one-line dock.
+                showTimeshiftStatus = false,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            Row(
+                modifier = Modifier.align(Alignment.CenterEnd),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 // H2 — the ORDER is core's, exactly as in the media cluster above. Each control
                 // keeps its own composable and condition; only the sequence is shared.
                 PlayerControl.clusterFor(tv = true, cluster = ControlCluster.TOOLS).forEach { control ->
