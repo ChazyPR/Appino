@@ -1,5 +1,6 @@
 *.iml
 .gradle/
+.gradle-user/
 .gradle-cache/
 .idea/
 .kotlin/
