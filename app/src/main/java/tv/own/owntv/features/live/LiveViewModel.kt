@@ -326,6 +326,7 @@ class LiveViewModel(
     // Focus is deliberately independent from preview playback: browsing a list may move its EPG
     // readout without retuning the video in the preview pane.
     private val _focusedChannel = MutableStateFlow<ChannelEntity?>(null)
+    val focusedChannel: StateFlow<ChannelEntity?> = _focusedChannel.asStateFlow()
 
     /** Every guide read this screen makes, and the now/next cache that used to live here — see
      *  [LiveEpgReader]. The shift it applies is passed in at each call, so this view model stays the
@@ -442,6 +443,15 @@ class LiveViewModel(
         .mapLatest { ch ->
             val id = ch?.categoryId ?: return@mapLatest null
             delay(150) // a quick scroll cancels this before the lookup runs
+            categoryDao.getById(id)?.name
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Category metadata for the browse cursor, paired with [focusedNowNext] in the preview pane. */
+    val focusedCategoryName: StateFlow<String?> = _focusedChannel
+        .mapLatest { ch ->
+            val id = ch?.categoryId ?: return@mapLatest null
+            delay(150)
             categoryDao.getById(id)?.name
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

@@ -150,7 +150,9 @@ fun LiveScreen(
     val externalPlayerOn by vm.externalPlayerOn.collectAsStateWithLifecycle()
     val catchupPlayer by vm.catchupPlayer.collectAsStateWithLifecycle()
     val previewChannel by vm.previewChannel.collectAsStateWithLifecycle()
+    val focusedChannel by vm.focusedChannel.collectAsStateWithLifecycle()
     val previewCategoryName by vm.previewCategoryName.collectAsStateWithLifecycle()
+    val focusedCategoryName by vm.focusedCategoryName.collectAsStateWithLifecycle()
     val previewArmed by vm.previewArmed.collectAsStateWithLifecycle()
     val previewBlockedSingleSession by vm.previewBlockedSingleSession.collectAsStateWithLifecycle()
     val nowNext by vm.nowNext.collectAsStateWithLifecycle()
@@ -766,8 +768,9 @@ fun LiveScreen(
             ) {
                 LivePreviewPane(
                     channel = previewChannel,
-                    categoryName = previewCategoryName,
-                    // Video/title stay on the confirmed preview channel; only the EPG follows focus.
+                    displayChannel = focusedChannel ?: previewChannel,
+                    categoryName = focusedCategoryName ?: previewCategoryName,
+                    // Video stays on the confirmed preview channel; identity and EPG follow focus.
                     nowNext = focusedNowNext,
                     previewEngine = vm.previewEngine,
                     showVideo = effectivePreview,
@@ -1179,6 +1182,7 @@ private fun ChannelMenuDivider() {
 @Composable
 private fun LivePreviewPane(
     channel: ChannelEntity?,
+    displayChannel: ChannelEntity?,
     categoryName: String?,
     nowNext: EpgNowNext?,
     previewEngine: tv.own.owntv.player.LivePreviewEngine,
@@ -1198,6 +1202,9 @@ private fun LivePreviewPane(
         PreviewPane(hint = stringResource(R.string.content_focus_channel))
         return
     }
+    // The video remains on [channel] until OK confirms another selection. The identity/EPG beneath it
+    // follows the row under the cursor, so browsing does not make the panel look stale.
+    val infoChannel = displayChannel ?: channel
     Column(
         // Scrollable so the EPG (Now/Next/Later) never gets clipped when it makes the pane taller
         // than the screen. The pane is informational only — there are NO focusable elements here,
@@ -1265,11 +1272,11 @@ private fun LivePreviewPane(
             }
         }
         Spacer(Modifier.height(14.dp))
-        Text(channel.name, style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
+        Text(infoChannel.name, style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
 
         // Metadata row — category · inferred genre (with colour dot) · catch-up status · EPG status.
         // All informational, never focusable.
-        ChannelMetaRow(channel = channel, categoryName = categoryName, nowNext = nowNext)
+        ChannelMetaRow(channel = infoChannel, categoryName = categoryName, nowNext = nowNext)
 
         EpgSection(nowNext)
 
