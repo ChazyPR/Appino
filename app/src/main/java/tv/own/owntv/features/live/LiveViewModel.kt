@@ -323,6 +323,10 @@ class LiveViewModel(
     private val _previewChannel = MutableStateFlow<ChannelEntity?>(null)
     val previewChannel: StateFlow<ChannelEntity?> = _previewChannel.asStateFlow()
 
+    // Focus is deliberately independent from preview playback: browsing a list may move its EPG
+    // readout without retuning the video in the preview pane.
+    private val _focusedChannel = MutableStateFlow<ChannelEntity?>(null)
+
     /** Every guide read this screen makes, and the now/next cache that used to live here — see
      *  [LiveEpgReader]. The shift it applies is passed in at each call, so this view model stays the
      *  single place that knows a customization changed. */
@@ -378,6 +382,13 @@ class LiveViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null to null)
 
     val nowNext: StateFlow<EpgNowNext?> = keyedNowNext.map { it.second }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** EPG for the channel under the browse cursor, without changing the preview video. */
+    val focusedNowNext: StateFlow<EpgNowNext?> = combine(_focusedChannel, epgRefresh) { ch, tick -> ch to tick }
+        .debounce(350)
+        .distinctUntilChanged { a, b -> a.first?.id == b.first?.id && a.second == b.second }
+        .mapLatest { (ch, _) -> ch?.let { epgReader.nowNext(it, custom.value, epgOffset.value) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
@@ -817,6 +828,12 @@ class LiveViewModel(
     fun selectPreview(channel: ChannelEntity) {
         _previewArmed.value = true
         _previewChannel.value = channel
+        _focusedChannel.value = channel
+    }
+
+    /** Move the browse cursor's EPG, leaving the selected preview video untouched. */
+    fun onChannelFocused(channel: ChannelEntity) {
+        _focusedChannel.value = channel
     }
 
     // The in-pane preview only plays once the user has actually focused a channel — so restoring the last

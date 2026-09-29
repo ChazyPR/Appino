@@ -154,6 +154,7 @@ fun LiveScreen(
     val previewArmed by vm.previewArmed.collectAsStateWithLifecycle()
     val previewBlockedSingleSession by vm.previewBlockedSingleSession.collectAsStateWithLifecycle()
     val nowNext by vm.nowNext.collectAsStateWithLifecycle()
+    val focusedNowNext by vm.focusedNowNext.collectAsStateWithLifecycle()
     val searchQuery by vm.searchQuery.collectAsStateWithLifecycle()
     val sortMode by vm.sortMode.collectAsStateWithLifecycle()
     val livePreviewSetting by vm.livePreviewEnabled.collectAsStateWithLifecycle()
@@ -728,6 +729,7 @@ fun LiveScreen(
                                     firstItemFocus = firstItemFocus,
                                 ),
                                 onFocus = {
+                                    vm.onChannelFocused(channel)
                                     if (rememberLive) {
                                         perCategoryChannelIds[selectedKey] = channel.id
                                     }
@@ -765,7 +767,8 @@ fun LiveScreen(
                 LivePreviewPane(
                     channel = previewChannel,
                     categoryName = previewCategoryName,
-                    nowNext = nowNext,
+                    // Video/title stay on the confirmed preview channel; only the EPG follows focus.
+                    nowNext = focusedNowNext,
                     previewEngine = vm.previewEngine,
                     showVideo = effectivePreview,
                     singleSessionBlocked = previewBlockedSingleSession,
