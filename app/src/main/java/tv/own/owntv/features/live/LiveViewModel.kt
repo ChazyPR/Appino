@@ -664,7 +664,6 @@ class LiveViewModel(
     }
 
     fun enterCategoryMoveMode(key: LiveKey) {
-        if (key !is LiveKey.Folder && key !is LiveKey.Custom) return
         viewModelScope.launch {
             val c = ctx.first { it.profileId >= 0 }
             _categoryMoveState.value = categoryEditor.beginMove(

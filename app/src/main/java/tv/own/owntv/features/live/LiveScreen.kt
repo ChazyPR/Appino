@@ -478,7 +478,11 @@ fun LiveScreen(
             onSelect = { idx -> railItems.getOrNull(idx)?.let { vm.select(it.key) } },
             onLongSelect = { idx -> 
                 railItems.getOrNull(idx)?.let { item ->
-                    if (item.key is LiveKey.Folder || item.key is LiveKey.Custom) {
+                    // Built-in All Channels and Favorites are rail entries too: give them the same
+                    // long-press customization menu as provider and custom categories.
+                    if (item.key is LiveKey.Folder || item.key is LiveKey.Custom ||
+                        item.key == LiveKey.All || item.key == LiveKey.Favorites
+                    ) {
                         contextCategory = item
                         contextCategoryKey = item.key
                     }
@@ -954,8 +958,10 @@ fun LiveScreen(
     contextCategory?.let { item ->
         CategoryContextMenu(
             categoryName = item.displayLabel(),
-            canHide = item.key is LiveKey.Folder || item.key is LiveKey.Custom,
-            canMove = item.key is LiveKey.Folder || item.key is LiveKey.Custom,
+            canHide = item.key is LiveKey.Folder || item.key is LiveKey.Custom ||
+                item.key == LiveKey.All || item.key == LiveKey.Favorites,
+            canMove = item.key is LiveKey.Folder || item.key is LiveKey.Custom ||
+                item.key == LiveKey.All || item.key == LiveKey.Favorites,
             onHide = { vm.hideCategory(item.key); contextCategory = null },
             onMove = { vm.enterCategoryMoveMode(item.key); contextCategory = null },
             onDismiss = { contextCategory = null }
