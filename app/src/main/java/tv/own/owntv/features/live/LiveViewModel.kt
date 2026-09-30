@@ -949,12 +949,12 @@ class LiveViewModel(
     private val _showCategoryBrowser = MutableStateFlow(false)
     val showCategoryBrowser: StateFlow<Boolean> = _showCategoryBrowser.asStateFlow()
 
-    /** Categories for the category browser (with customizations applied). */
+    /** Categories for the full-screen category browser, excluding the same hidden groups as Live TV. */
     val browserCategories: StateFlow<List<Pair<CategoryEntity, String>>> = ctx
         .flatMapLatest { c ->
             if (c.profileId < 0) flowOf(emptyList())
-            else combine(categoryDao.observe(c.sourceIds, MediaType.LIVE), custom) { cats, cust ->
-                cats.applyCustomizations(cust)
+            else combine(categoryDao.observe(c.sourceIds, MediaType.LIVE), custResolved) { cats, state ->
+                cats.filterNot { it.id in state.hiddenCats }.applyCustomizations(state.cust)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
