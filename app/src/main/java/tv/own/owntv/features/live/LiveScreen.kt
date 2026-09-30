@@ -677,7 +677,8 @@ fun LiveScreen(
                     query = searchQuery,
                     onQueryChange = vm::setSearchQuery,
                     placeholder = stringResource(R.string.content_search_channels),
-                    modifier = Modifier.weight(1f).focusRequester(listSearchFocus).onFocusChanged { if (it.hasFocus && previewEnabled) vm.stopPreview() },
+                    // Searching filters the list only; keep the selected channel's preview playing.
+                    modifier = Modifier.weight(1f).focusRequester(listSearchFocus),
                 )
                 Spacer(Modifier.size(10.dp))
                 SortChip(mode = sortMode, onToggle = vm::toggleSort)
