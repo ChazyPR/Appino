@@ -36,7 +36,10 @@ import androidx.tv.material3.Text
 import tv.own.owntv.R
 import tv.own.owntv.core.i18n.HorizontalDirection
 import tv.own.owntv.core.i18n.horizontalDirection
-import tv.own.owntv.core.database.entity.CategoryEntity
+import tv.own.owntv.core.live.LiveKey
+import tv.own.owntv.core.live.serialize
+import tv.own.owntv.features.live.LiveRailItem
+import tv.own.owntv.features.live.displayLabel
 import tv.own.owntv.ui.components.FocusableSurface
 import tv.own.owntv.ui.components.ContentPanelFill
 import tv.own.owntv.ui.components.modalScrim
@@ -54,16 +57,16 @@ import tv.own.owntv.ui.theme.OwnTVTheme
  */
 @Composable
 fun CategoryBrowserOverlay(
-    categories: List<Pair<CategoryEntity, String>>,
+    categories: List<LiveRailItem>,
     currentCategoryId: Long?,
-    onSelect: (categoryId: Long) -> Unit,
+    onSelect: (LiveKey) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = OwnTVTheme.colors
     val layoutDirection = LocalLayoutDirection.current
     val currentIndex = remember(categories, currentCategoryId) {
-        categories.indexOfFirst { it.first.id == currentCategoryId }.coerceAtLeast(0)
+        categories.indexOfFirst { (it.key as? LiveKey.Folder)?.id == currentCategoryId }.coerceAtLeast(0)
     }
     val listState = rememberLazyListState()
     val focusCurrent = remember { FocusRequester() }
@@ -106,13 +109,14 @@ fun CategoryBrowserOverlay(
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(categories, key = { it.first.id }) { (cat, displayName) ->
-                    val isCurrent = cat.id == currentCategoryId
+                items(categories, key = { it.key.serialize() }) { category ->
+                    val categoryId = (category.key as? LiveKey.Folder)?.id
+                    val isCurrent = categoryId == currentCategoryId
                     CategoryRow(
-                        name = displayName,
+                        name = category.displayLabel(),
                         isCurrent = isCurrent,
-                        onClick = { onSelect(cat.id) },
-                        modifier = if (cat.id == categories.getOrNull(currentIndex)?.first?.id) {
+                        onClick = { onSelect(category.key) },
+                        modifier = if (category.key == categories.getOrNull(currentIndex)?.key) {
                             Modifier.focusRequester(focusCurrent)
                         } else {
                             Modifier

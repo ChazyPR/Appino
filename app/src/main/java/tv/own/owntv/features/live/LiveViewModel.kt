@@ -51,7 +51,6 @@ import tv.own.owntv.core.epg.CatchupUrl
 import tv.own.owntv.core.live.StreamGrant
 import tv.own.owntv.core.recording.RecordingSchedule
 import tv.own.owntv.core.customize.SectionCustomizations
-import tv.own.owntv.core.customize.applyCustomizations
 import tv.own.owntv.core.customize.CategoryMove
 import tv.own.owntv.core.customize.CategoryRailEditor
 import tv.own.owntv.core.customize.MoveKind
@@ -949,28 +948,56 @@ class LiveViewModel(
     private val _showCategoryBrowser = MutableStateFlow(false)
     val showCategoryBrowser: StateFlow<Boolean> = _showCategoryBrowser.asStateFlow()
 
-    /** Categories for the full-screen category browser, excluding the same hidden groups as Live TV. */
-    val browserCategories: StateFlow<List<Pair<CategoryEntity, String>>> = ctx
-        .flatMapLatest { c ->
-            if (c.profileId < 0) flowOf(emptyList())
-            else combine(categoryDao.observe(c.sourceIds, MediaType.LIVE), custResolved) { cats, state ->
-                cats.filterNot { it.id in state.hiddenCats }.applyCustomizations(state.cust)
-            }
-        }
+    /** Provider and custom categories for the full-screen browser — the same rail shown by Live TV. */
+    val browserCategories: StateFlow<List<LiveRailItem>> = railItems
+        .map { items -> items.filter { it.key is LiveKey.Folder || it.key is LiveKey.Custom } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun showCategories() { _showCategoryBrowser.value = true }
     fun hideCategoryBrowser() { _showCategoryBrowser.value = false }
 
-    /** Load channels for an arbitrary category into the zap list. */
-    fun loadChannelsForCategory(categoryId: Long) =
-        zapList.armForCategory(categoryId) { _showCategoryBrowser.value = false }
+    /** Load a provider or custom category into the in-player channel list. */
+    fun loadChannelsForCategory(key: LiveKey) {
+        when (key) {
+            is LiveKey.Folder -> zapList.armForCategory(key.id) { _showCategoryBrowser.value = false }
+            is LiveKey.Custom -> viewModelScope.launch {
+                val pid = currentProfileId() ?: return@launch
+                val channels = visibleOverlayChannels(
+                    customCategoryDao.snapshotChannels(
+                        pid, key.id, ctx.value.sourceIds.ifEmpty { listOf(-1L) }, ZAP_LIST_LIMIT,
+                    ),
+                )
+                if (channels.isEmpty()) return@launch
+                val title = browserCategories.value.firstOrNull { it.key == key }?.title
+                zapList.armFromBrowse(channels, title = title, key = key, categoryId = null)
+                _showCategoryBrowser.value = false
+            }
+            LiveKey.All, LiveKey.Favorites, LiveKey.History, LiveKey.Catchup -> Unit
+        }
+    }
 
     /** One provider category, in its manual order — the in-player category browser's pick. */
     private suspend fun channelsInCategory(categoryId: Long): List<ChannelEntity> {
         val pid = currentProfileId() ?: return emptyList()
         val ctxKey = folderContextKeys.value[categoryId] ?: ""
-        return channelDao.snapshotByCategoryManual(categoryId, pid, ctxKey, ZAP_LIST_LIMIT)
+        return visibleOverlayChannels(
+            channelDao.snapshotByCategoryManual(categoryId, pid, ctxKey, ZAP_LIST_LIMIT),
+            originKey = ctxKey,
+        )
+    }
+
+    /** Apply the browse list's hide, rename and moved-out rules to full-screen overlay snapshots. */
+    private fun visibleOverlayChannels(channels: List<ChannelEntity>, originKey: String? = null): List<ChannelEntity> {
+        val state = custResolved.value
+        val cust = state.cust
+        return channels.asSequence()
+            .filter { channel ->
+                CustomizeKeys.channel(channel) !in cust.hiddenItems &&
+                    (channel.categoryId == null || channel.categoryId !in state.hiddenCats) &&
+                    (originKey == null || cust.movedFromOrigin[CustomizeKeys.channel(channel)] != originKey)
+            }
+            .map { channel -> cust.itemNames[CustomizeKeys.channel(channel)]?.let { channel.copy(name = it) } ?: channel }
+            .toList()
     }
 
     /** [channel]'s own provider category, with the same hide/rename treatment the browsing lists get,
@@ -986,11 +1013,10 @@ class LiveViewModel(
                 channelDao.snapshotAll(ctx.value.sourceIds.ifEmpty { listOf(-1L) }, ZAP_LIST_LIMIT)
             }
         }
-        val cust = custom.value
-        val hiddenCats = hiddenCategoryIds.value
-        return raw
-            .filter { CustomizeKeys.channel(it) !in cust.hiddenItems && (it.categoryId == null || it.categoryId !in hiddenCats) }
-            .map { ch -> cust.itemNames[CustomizeKeys.channel(ch)]?.let { ch.copy(name = it) } ?: ch }
+        return visibleOverlayChannels(
+            raw,
+            originKey = catId?.let { folderContextKeys.value[it] },
+        )
     }
 
     /** The profile's recently-watched channels, for the right-hand in-player history overlay. */
