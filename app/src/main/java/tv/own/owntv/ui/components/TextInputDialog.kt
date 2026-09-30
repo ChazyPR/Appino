@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -50,6 +51,9 @@ fun TextInputDialog(
     hint: String? = null,
     onDelete: (() -> Unit)? = null,
     allowBlank: Boolean = true,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    digitsOnly: Boolean = false,
+    maxLength: Int? = null,
 ) {
     val colors = OwnTVTheme.colors
     val resolvedLabel = label ?: stringResource(R.string.common_name)
@@ -79,7 +83,18 @@ fun TextInputDialog(
                     Text(hint, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(18.dp))
-                OwnTVTextField(value = value, onValueChange = { value = it }, label = resolvedLabel, modifier = Modifier.fillMaxWidth(), focusRequester = fieldFocus, surface = GlassSurface.DIALOGS)
+                OwnTVTextField(
+                    value = value,
+                    onValueChange = { raw ->
+                        val filtered = if (digitsOnly) raw.filter(Char::isDigit) else raw
+                        value = maxLength?.let(filtered::take) ?: filtered
+                    },
+                    label = resolvedLabel,
+                    modifier = Modifier.fillMaxWidth(),
+                    focusRequester = fieldFocus,
+                    surface = GlassSurface.DIALOGS,
+                    keyboardType = keyboardType,
+                )
                 Spacer(Modifier.height(22.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (onDelete != null) {

@@ -51,6 +51,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -244,6 +245,7 @@ fun LiveScreen(
     var channelPaneFocused by remember { mutableStateOf(false) }
     var railPaneFocused by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<ChannelEntity?>(null) }
+    var renumbering by remember { mutableStateOf<ChannelEntity?>(null) }
     var matchingEpg by remember { mutableStateOf<ChannelEntity?>(null) }
     var offsettingEpg by remember { mutableStateOf<ChannelEntity?>(null) }
     var catchupChannel by remember { mutableStateOf<ChannelEntity?>(null) }
@@ -310,7 +312,7 @@ fun LiveScreen(
         contextMenuOpen = false
         // A follow-up dialog (rename / match EPG / catch-up / move) grabs focus itself — only restore
         // for plain closes (Cancel, Favourite, Hide, Close). Those dialogs restore on their own close.
-        if (renaming != null || matchingEpg != null || offsettingEpg != null || catchupChannel != null || enteringMoveMode ||
+        if (renaming != null || renumbering != null || matchingEpg != null || offsettingEpg != null || catchupChannel != null || enteringMoveMode ||
             moveItem != null || creatingCategory
         ) return@LaunchedEffect
         restoreToContextRow()
@@ -330,8 +332,8 @@ fun LiveScreen(
     }
     // Rename restoration: re-assert row focus after dialog closes.
     var renameWasOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(renaming) {
-        if (renaming != null) { renameWasOpen = true; return@LaunchedEffect }
+    LaunchedEffect(renaming, renumbering) {
+        if (renaming != null || renumbering != null) { renameWasOpen = true; return@LaunchedEffect }
         if (!renameWasOpen) return@LaunchedEffect
         renameWasOpen = false
         repeat(5) {
@@ -828,6 +830,23 @@ fun LiveScreen(
         )
     }
 
+    renumbering?.let { ch ->
+        TextInputDialog(
+            title = stringResource(R.string.content_change_channel_number),
+            initial = ch.number?.toString().orEmpty(),
+            label = stringResource(R.string.content_channel_number),
+            hint = stringResource(R.string.content_channel_number_hint),
+            keyboardType = KeyboardType.Number,
+            digitsOnly = true,
+            maxLength = 7,
+            onConfirm = {
+                vm.setChannelNumber(ch, it.toIntOrNull())
+                renumbering = null
+            },
+            onDismiss = { renumbering = null },
+        )
+    }
+
     matchingEpg?.let { ch ->
         EpgMatchDialog(
             channelName = ch.name,
@@ -859,6 +878,7 @@ fun LiveScreen(
             isHistory = selectedKey == LiveKey.History,
             onToggleFavorite = { vm.toggleFavorite(ch); contextChannel = null },
             onRename = { renaming = ch; contextChannel = null },
+            onChangeNumber = { renumbering = ch; contextChannel = null },
             onHide = { vm.hideChannel(ch); contextChannel = null },
             onMatchEpg = { matchingEpg = ch; contextChannel = null },
             onEpgOffset = { offsettingEpg = ch; contextChannel = null },
@@ -1050,6 +1070,7 @@ private fun ChannelContextMenu(
     isHistory: Boolean,
     onToggleFavorite: () -> Unit,
     onRename: () -> Unit,
+    onChangeNumber: () -> Unit,
     onHide: () -> Unit,
     onMatchEpg: () -> Unit,
     onEpgOffset: () -> Unit,
@@ -1086,6 +1107,7 @@ private fun ChannelContextMenu(
             val actions = buildList {
                 add(MenuAction("favourite", if (isFavorite) stringResource(R.string.content_remove_favourite) else stringResource(R.string.content_add_favourite), OwnTVIcon.FAVORITE, group = 0, onClick = onToggleFavorite))
                 add(MenuAction("rename", stringResource(R.string.content_rename), group = 0, onClick = onRename))
+                add(MenuAction("change_number", stringResource(R.string.content_change_channel_number), group = 0, onClick = onChangeNumber))
                 add(MenuAction("match_epg", stringResource(R.string.content_match_epg), OwnTVIcon.EPG, group = 1, onClick = onMatchEpg))
                 add(MenuAction("epg_offset", stringResource(R.string.content_epg_time_offset), OwnTVIcon.EPG, group = 1, onClick = onEpgOffset))
                 if (hasCatchup) add(MenuAction("catchup", stringResource(R.string.content_catchup), group = 1, onClick = onCatchup))

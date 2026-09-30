@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tv.own.owntv.core.customize.SectionCustomizations
+import tv.own.owntv.features.live.applyToChannel
 import tv.own.owntv.core.database.dao.ChannelDao
 import tv.own.owntv.core.database.dao.EpgDao
 import tv.own.owntv.core.database.dao.ProfileDao
@@ -921,7 +922,7 @@ class EpgViewModel(
                 .filter {
                     customMemberIds != null || it.categoryId == null || it.categoryId !in hiddenCatIds
                 }
-                .map { ch -> cust.itemNames[CustomizeKeys.channel(ch)]?.let { ch.copy(name = it) } ?: ch }
+                .map(cust::applyToChannel)
             val matched = applyEpgMatches(auto, cust, playlistIds, q)
             // Order the guide by its own sort. LIVE_TV mirrors the Live sort; CATCHUP floats archive
             // channels to the top; ALPHA/PROVIDER are explicit. CATCHUP with none available falls to LIVE_TV.

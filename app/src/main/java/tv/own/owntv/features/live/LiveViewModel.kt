@@ -616,7 +616,7 @@ class LiveViewModel(
                                 key !is LiveKey.Folder || origin != folderContextKeys.value[key.id]
                             } ?: true)
                     }
-                    .map { ch -> cust.itemNames[CustomizeKeys.channel(ch)]?.let { ch.copy(name = it) } ?: ch }
+                    .map(cust::applyToChannel)
             }
         }
         .cachedIn(viewModelScope)
@@ -637,6 +637,31 @@ class LiveViewModel(
         viewModelScope.launch {
             val pid = currentProfileId() ?: return@launch
             customize.renameItem(pid, MediaType.LIVE, CustomizeKeys.channel(channel), newName)
+        }
+    }
+
+    /** Change this profile's channel number; null restores the provider's original number. */
+    fun setChannelNumber(channel: ChannelEntity, number: Int?) {
+        viewModelScope.launch {
+            val pid = currentProfileId() ?: return@launch
+            val customizationKey = channelNumberCustomizationKey(channel)
+            customize.renameItem(
+                pid,
+                MediaType.LIVE,
+                customizationKey,
+                number?.toString(),
+            )
+            // Refresh the two in-memory selections immediately. Paging will redraw the list from
+            // the provider row, but the preview/player state is intentionally independent of list
+            // focus and would otherwise keep showing the old number until the channel changed.
+            val updatedCustom = custom.first {
+                if (number == null) customizationKey !in it.itemNames
+                else it.itemNames[customizationKey] == number.toString()
+            }
+            val providerChannel = channelDao.getById(channel.id) ?: return@launch
+            val updatedChannel = updatedCustom.applyToChannel(providerChannel)
+            if (_previewChannel.value?.id == channel.id) _previewChannel.value = updatedChannel
+            if (_focusedChannel.value?.id == channel.id) _focusedChannel.value = updatedChannel
         }
     }
 
@@ -742,7 +767,7 @@ class LiveViewModel(
                 CustomizeKeys.channel(it) !in cs.cust.hiddenItems &&
                     (it.categoryId == null || it.categoryId !in cs.hiddenCats)
             }
-                .map { ch -> cs.cust.itemNames[CustomizeKeys.channel(ch)]?.let { ch.copy(name = it) } ?: ch }
+                .map(cs.cust::applyToChannel)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -996,7 +1021,7 @@ class LiveViewModel(
                     (channel.categoryId == null || channel.categoryId !in state.hiddenCats) &&
                     (originKey == null || cust.movedFromOrigin[CustomizeKeys.channel(channel)] != originKey)
             }
-            .map { channel -> cust.itemNames[CustomizeKeys.channel(channel)]?.let { channel.copy(name = it) } ?: channel }
+            .map(cust::applyToChannel)
             .toList()
     }
 
@@ -1026,7 +1051,7 @@ class LiveViewModel(
         val hiddenCats = hiddenCategoryIds.value
         return channelDao.recentlyWatched(pid, limit).first()
             .filter { CustomizeKeys.channel(it) !in cust.hiddenItems && (it.categoryId == null || it.categoryId !in hiddenCats) }
-            .map { ch -> cust.itemNames[CustomizeKeys.channel(ch)]?.let { ch.copy(name = it) } ?: ch }
+            .map(cust::applyToChannel)
     }
 
     /** True when full-screen is running on the **ExoPlayer** engine (a promoted preview) rather than mpv.
@@ -1207,9 +1232,35 @@ class LiveViewModel(
                 val currentCustom = custom.value
 
                 // Stage 1: query the currently playing source.
-                val currentSourceCandidates = channelDao.findByNumber(
-                    listOf(currentChannel.sourceId), number,
-                ).filter { isChannelVisible(it, currentCustom, activeHiddenCats) }
+                suspend fun candidates(sourceIds: List<Long>): List<ChannelEntity> {
+                    // Custom numbers live beside the other profile customizations. Resolve their
+                    // stable channel keys first, then add provider-number matches whose number has
+                    // not been overridden to something else.
+                    val customKeys = currentCustom.itemNames.asSequence()
+                        .filter { (key, value) ->
+                            key.startsWith(CHANNEL_NUMBER_KEY_PREFIX) && value.toIntOrNull() == number
+                        }
+                        .map { (key, _) -> key.removePrefix(CHANNEL_NUMBER_KEY_PREFIX) }
+                        .toList()
+                    val customMatches = buildList {
+                        for (itemKey in customKeys) {
+                            val sourceId = itemKey.substringBefore(':').toLongOrNull() ?: continue
+                            if (sourceId !in sourceIds) continue
+                            val remoteOrName = CustomizeKeys.tailOf(itemKey)
+                            val channel = channelDao.findByRemote(sourceId, remoteOrName)
+                                ?: channelDao.findByName(sourceId, remoteOrName)
+                            if (channel != null) add(channel)
+                        }
+                    }
+                    val providerMatches = channelDao.findByNumber(sourceIds, number)
+                        .filterNot(currentCustom::hasChannelNumberOverride)
+                    return (customMatches + providerMatches)
+                        .distinctBy { it.id }
+                        .filter { isChannelVisible(it, currentCustom, activeHiddenCats) }
+                        .map(currentCustom::applyToChannel)
+                }
+
+                val currentSourceCandidates = candidates(listOf(currentChannel.sourceId))
 
                 if (currentSourceCandidates.isNotEmpty()) {
                     val resolvedId = tv.own.owntv.player.resolveDirectTuneCandidate(
@@ -1218,16 +1269,14 @@ class LiveViewModel(
                     )
                     val r = resolvedId?.let { id -> currentSourceCandidates.first { it.id == id } }
                         ?: return@withContext ChannelNumberLookupResult.Ambiguous(currentSourceCandidates.size)
-                    val customName = currentCustom.itemNames[CustomizeKeys.channel(r)]
-                    return@withContext ChannelNumberLookupResult.Found(customName?.let { r.copy(name = it) } ?: r)
+                    return@withContext ChannelNumberLookupResult.Found(r)
                 }
 
                 // Stage 2: fallback to other active Live sources.
                 val fallbackSourceIds = snapshotSourceIds.filter { it != currentChannel.sourceId }
                 if (fallbackSourceIds.isEmpty()) return@withContext ChannelNumberLookupResult.NotFound
 
-                val fallbackCandidates = channelDao.findByNumber(fallbackSourceIds, number)
-                    .filter { isChannelVisible(it, currentCustom, activeHiddenCats) }
+                val fallbackCandidates = candidates(fallbackSourceIds)
                 if (fallbackCandidates.isEmpty()) return@withContext ChannelNumberLookupResult.NotFound
 
                 val r = tv.own.owntv.player.resolveDirectTuneCandidate(
@@ -1235,8 +1284,7 @@ class LiveViewModel(
                     snapshotZapList.map { it.id }.toSet(),
                 )?.let { id -> fallbackCandidates.first { it.id == id } }
                     ?: return@withContext ChannelNumberLookupResult.Ambiguous(fallbackCandidates.size)
-                val customName = currentCustom.itemNames[CustomizeKeys.channel(r)]
-                ChannelNumberLookupResult.Found(customName?.let { r.copy(name = it) } ?: r)
+                ChannelNumberLookupResult.Found(r)
             }
 
             // Dispatch the lookup outcome.
@@ -1309,7 +1357,7 @@ class LiveViewModel(
         val raw = beforeRaw.asReversed() + channel + afterRaw
         raw
             .filter { isChannelVisible(it, cust, hiddenCats) }
-            .map { ch -> cust.itemNames[CustomizeKeys.channel(ch)]?.let { ch.copy(name = it) } ?: ch }
+            .map(cust::applyToChannel)
     }
 
     /** "External player" is on for Live TV — the screen must NOT open the fullscreen in-app player
@@ -1413,7 +1461,7 @@ class LiveViewModel(
             val channel = withContext(Dispatchers.IO) { channelDao.getById(previous.id) } ?: return@launch
             if (channel.sourceId !in ctx.value.sourceIds) return@launch
             zapList.armFor(channel)
-            ensurePlaying(custom.value.itemNames[CustomizeKeys.channel(channel)]?.let { channel.copy(name = it) } ?: channel)
+            ensurePlaying(custom.value.applyToChannel(channel))
         }
     }
 

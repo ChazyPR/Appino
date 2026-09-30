@@ -3,4 +3,7 @@
     <string name="content_search_channels">Pesquisar canais…</string>
     <string name="content_search_movies">Pesquisar filmes…</string>
     <string name="content_search_series">Pesquisar séries…</string>
+    <string name="content_change_channel_number">Alterar número do canal</string>
+    <string name="content_channel_number">Número do canal</string>
+    <string name="content_channel_number_hint">Digite um número ou deixe vazio para restaurar o original.</string>
 </resources>
